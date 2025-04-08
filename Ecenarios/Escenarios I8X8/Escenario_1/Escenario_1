@@ -4,64 +4,77 @@ import random
 import os
 import sqlite3
 
-def generar_imagenes_y_etiquetas(num_imagenes=1000, tamano=(8, 8)):
+def generar_imagenes_y_etiquetas(num_imagenes=5000, tamano=(8, 8)):
     imagenes = []
     etiquetas = []
-    
+
     for _ in range(num_imagenes):
         # Crear una imagen de fondo blanco
         imagen = np.ones(tamano, dtype=np.uint8) * 255
-        
-        # Determinar si se debe insertar un contorno de 3x3 píxeles
-        if random.random() < 0.5:
-            # Generar un contorno de 3x3 píxeles en una posición aleatoria
+
+        # Seleccionar aleatoriamente el tipo de imagen a generar
+        tipo_imagen = random.choice(["cuadrado_completo", "cuadrado_faltante", "aleatorio"])
+
+        if tipo_imagen == "cuadrado_completo":
+            # Insertar un cuadrado negro completo de 3x3 píxeles con un píxel blanco en el centro
             x, y = random.randint(1, tamano[0] - 4), random.randint(1, tamano[1] - 4)
             for i in range(3):
                 for j in range(3):
-                    if (i == 1 and j == 1):
-                        continue
+                    if i == 1 and j == 1:
+                        continue  # Mantener el píxel central blanco
                     imagen[x + i, y + j] = 0
-            
-            # Añadir píxeles negros adicionales que no toquen el contorno del cuadrado
+
+            # Insertar píxeles negros adicionales que no toquen el contorno del cuadro
             for _ in range(random.randint(1, tamano[0] * tamano[1] - 9)):
                 while True:
-                    px, py = random.randint(0, tamano[0]-1), random.randint(0, tamano[1]-1)
+                    px, py = random.randint(0, tamano[0] - 1), random.randint(0, tamano[1] - 1)
                     if not (x - 1 <= px <= x + 3 and y - 1 <= py <= y + 3):
                         imagen[px, py] = 0
                         break
-            
-            # Verificar si hay píxeles negros fuera del contorno adyacente
+
             etiqueta = "sí"
-            for i in range(-1, 4):
-                for j in range(-1, 4):
-                    if (0 <= x + i < tamano[0] and 0 <= y + j < tamano[1]) and (i in [-1, 3] or j in [-1, 3]):
-                        if imagen[x + i, y + j] == 0:
-                            etiqueta = "no"
-                            break
-                if etiqueta == "no":
-                    break
-        else:
-            # Insertar píxeles negros aleatorios sin formar el contorno
+
+        elif tipo_imagen == "cuadrado_faltante":
+            # Insertar un cuadrado negro con un píxel faltante y un píxel blanco en el centro
+            x, y = random.randint(1, tamano[0] - 4), random.randint(1, tamano[1] - 4)
+            posiciones_contorno = [(i, j) for i in range(3) for j in range(3) if not (i == 1 and j == 1)]
+            faltante = random.choice(posiciones_contorno)
+            for i, j in posiciones_contorno:
+                if (i, j) != faltante:
+                    imagen[x + i, y + j] = 0
+
+            # Insertar píxeles negros adicionales que no toquen el contorno del cuadro
+            for _ in range(random.randint(1, tamano[0] * tamano[1] - 9)):
+                while True:
+                    px, py = random.randint(0, tamano[0] - 1), random.randint(0, tamano[1] - 1)
+                    if not (x - 1 <= px <= x + 3 and y - 1 <= py <= y + 3):
+                        imagen[px, py] = 0
+                        break
+
+            etiqueta = "no"
+
+        elif tipo_imagen == "aleatorio":
+            # Insertar píxeles negros aleatorios
             num_pixeles_negros = random.randint(1, tamano[0] * tamano[1])
             for _ in range(num_pixeles_negros):
-                x, y = random.randint(0, tamano[0]-1), random.randint(0, tamano[1]-1)
-                imagen[x, y] = 0
+                px, py = random.randint(0, tamano[0] - 1), random.randint(0, tamano[1] - 1)
+                imagen[px, py] = 0
             etiqueta = "no"
-        
+
         imagenes.append(imagen)
         etiquetas.append(etiqueta)
-    
+
     return imagenes, etiquetas
 
 def guardar_imagenes_e_etiquetas(imagenes, etiquetas, carpeta="imagenes"):
     if not os.path.exists(carpeta):
         os.makedirs(carpeta)
-    
+
     for i, (imagen, etiqueta) in enumerate(zip(imagenes, etiquetas)):
         # Guardar la imagen
         nombre_imagen = os.path.join(carpeta, f"imagen_{i+1}.png")
         cv2.imwrite(nombre_imagen, imagen)
-        
+
         # Guardar la etiqueta
         nombre_etiqueta = os.path.join(carpeta, f"etiqueta_{i+1}.txt")
         with open(nombre_etiqueta, 'w') as f:
@@ -91,13 +104,13 @@ def limpiar_base_de_datos(nombre_db="imagenes.db"):
 def insertar_en_base_de_datos(imagenes, etiquetas, nombre_db="imagenes.db"):
     conn = sqlite3.connect(nombre_db)
     cursor = conn.cursor()
-    
-    for i, (imagen, etiqueta) in enumerate(zip(imagenes, etiquetas)):
+
+    for i, etiqueta in enumerate(etiquetas):
         nombre_imagen = f"imagen_{i+1}.png"
         cursor.execute('''
             INSERT INTO imagenes (nombre_imagen, etiqueta) VALUES (?, ?)
         ''', (nombre_imagen, etiqueta))
-    
+
     conn.commit()
     conn.close()
 
